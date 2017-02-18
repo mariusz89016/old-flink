@@ -85,7 +85,7 @@ import java.util.Set;
 import static org.apache.flink.configuration.ConfigConstants.ENV_FLINK_LIB_DIR;
 import static org.apache.flink.yarn.cli.FlinkYarnSessionCli.CONFIG_FILE_LOG4J_NAME;
 import static org.apache.flink.yarn.cli.FlinkYarnSessionCli.CONFIG_FILE_LOGBACK_NAME;
-import static org.apache.flink.yarn.cli.FlinkYarnSessionCli.getDynamicProperties;
+import static org.apache.flink.runtime.clusterframework.BootstrapTools.writeConfiguration;
 
 /**
  * The descriptor with deployment information for spawning or resuming a {@link YarnClusterClient}.
@@ -126,7 +126,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 
 	private Path flinkJarPath;
 
-	private String dynamicPropertiesEncoded;
+	private Map<String, String> dynamicPropertiesMap = new HashMap<>();
 
 	/** Lazily initialized list of files to ship */
 	protected List<File> shipFiles = new LinkedList<>();
@@ -248,8 +248,8 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		}
 	}
 
-	public void setDynamicPropertiesEncoded(String dynamicPropertiesEncoded) {
-		this.dynamicPropertiesEncoded = dynamicPropertiesEncoded;
+	public void setDynamicPropertiesMap(Map<String, String> dynamicPropertiesMap) {
+		this.dynamicPropertiesMap = dynamicPropertiesMap;
 	}
 
 	/**
@@ -287,8 +287,8 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		this.userJarFiles = localUserJarFiles;
 	}
 
-	public String getDynamicPropertiesEncoded() {
-		return this.dynamicPropertiesEncoded;
+	public Map<String, String> getDynamicPropertiesMap() {
+		return dynamicPropertiesMap;
 	}
 
 
@@ -471,8 +471,7 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		}
 
 		// ------------------ Add dynamic properties to local flinkConfiguraton ------
-		Map<String, String> dynProperties = getDynamicProperties(dynamicPropertiesEncoded);
-		for (Map.Entry<String, String> dynProperty : dynProperties.entrySet()) {
+		for (Map.Entry<String, String> dynProperty : dynamicPropertiesMap.entrySet()) {
 			flinkConfiguration.setString(dynProperty.getKey(), dynProperty.getValue());
 		}
 
@@ -710,8 +709,17 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		LocalResource flinkConf = Records.newRecord(LocalResource.class);
 		Path remotePathJar =
 			Utils.setupLocalResource(fs, appId.toString(), flinkJarPath, appMasterJar, fs.getHomeDirectory());
-		Path remotePathConf =
-			Utils.setupLocalResource(fs, appId.toString(), flinkConfigurationPath, flinkConf, fs.getHomeDirectory());
+
+		for (Map.Entry<String, String> entry : dynamicPropertiesMap.entrySet()) {
+			flinkConfiguration.setString(entry.getKey(), entry.getValue());
+		}
+		File generatedFlinkConfigFile = File.createTempFile("flink-conf-" + appId, null);
+		generatedFlinkConfigFile.deleteOnExit();
+		writeConfiguration(flinkConfiguration, generatedFlinkConfigFile);
+
+		Path remotePathConf = Utils.setupLocalResource(fs, appId.toString(),
+			new Path(generatedFlinkConfigFile.toURI()), flinkConf, fs.getHomeDirectory());
+
 		localResources.put("flink.jar", appMasterJar);
 		localResources.put("flink-conf.yaml", flinkConf);
 
@@ -829,10 +837,6 @@ public abstract class AbstractYarnClusterDescriptor implements ClusterDescriptor
 		if(remoteYarnSiteXmlPath != null && remoteKrb5Path != null) {
 			appMasterEnv.put(YarnConfigKeys.ENV_YARN_SITE_XML_PATH, remoteYarnSiteXmlPath.toString());
 			appMasterEnv.put(YarnConfigKeys.ENV_KRB5_PATH, remoteKrb5Path.toString() );
-		}
-
-		if(dynamicPropertiesEncoded != null) {
-			appMasterEnv.put(YarnConfigKeys.ENV_DYNAMIC_PROPERTIES, dynamicPropertiesEncoded);
 		}
 
 		// set classpath from YARN configuration

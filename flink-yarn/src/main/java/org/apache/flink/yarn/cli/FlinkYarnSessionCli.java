@@ -23,7 +23,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.PosixParser;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.client.cli.CliFrontendParser;
 import org.apache.flink.client.cli.CustomCommandLine;
 import org.apache.flink.configuration.ConfigConstants;
@@ -56,8 +55,6 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -65,6 +62,7 @@ import java.util.concurrent.Callable;
 
 import static org.apache.flink.client.cli.CliFrontendParser.ADDRESS_OPTION;
 import static org.apache.flink.configuration.ConfigConstants.HA_ZOOKEEPER_NAMESPACE_KEY;
+import static org.apache.flink.yarn.cli.FlinkYarnCliUtils.retrieveDynamicProperties;
 
 /**
  * Class handling the command line interface to the YARN session.
@@ -86,9 +84,6 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 	private static final String YARN_PROPERTIES_FILE = ".yarn-properties-";
 	static final String YARN_APPLICATION_ID_KEY = "applicationID";
 	private static final String YARN_PROPERTIES_PARALLELISM = "parallelism";
-	private static final String YARN_PROPERTIES_DYNAMIC_PROPERTIES_STRING = "dynamicPropertiesString";
-
-	private static final String YARN_DYNAMIC_PROPERTIES_SEPARATOR = "@@"; // this has to be a regex for String.split()
 
 	//------------------------------------ Command Line argument options -------------------------
 	// the prefix transformation is used by the CliFrontend static constructor.
@@ -237,13 +232,6 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 			}
 		}
 
-		// handle the YARN client's dynamic properties
-		String dynamicPropertiesEncoded = yarnProperties.getProperty(YARN_PROPERTIES_DYNAMIC_PROPERTIES_STRING);
-		Map<String, String> dynamicProperties = getDynamicProperties(dynamicPropertiesEncoded);
-		for (Map.Entry<String, String> dynamicProperty : dynamicProperties.entrySet()) {
-			flinkConfiguration.setString(dynamicProperty.getKey(), dynamicProperty.getValue());
-		}
-
 		return applicationID;
 	}
 
@@ -319,13 +307,7 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 			yarnClusterDescriptor.setTaskManagerSlots(slots);
 		}
 
-		String[] dynamicProperties = null;
-		if (cmd.hasOption(DYNAMIC_PROPERTIES.getOpt())) {
-			dynamicProperties = cmd.getOptionValues(DYNAMIC_PROPERTIES.getOpt());
-		}
-		String dynamicPropertiesEncoded = StringUtils.join(dynamicProperties, YARN_DYNAMIC_PROPERTIES_SEPARATOR);
-
-		yarnClusterDescriptor.setDynamicPropertiesEncoded(dynamicPropertiesEncoded);
+		yarnClusterDescriptor.setDynamicPropertiesMap(retrieveDynamicProperties(cmd, DYNAMIC_PROPERTIES));
 
 		if (cmd.hasOption(DETACHED.getOpt()) || cmd.hasOption(CliFrontendParser.DETACHED_OPTION.getOpt())) {
 			this.detachedMode = true;
@@ -641,10 +623,8 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 						Integer.toString(yarnDescriptor.getTaskManagerSlots() * yarnDescriptor.getTaskManagerCount());
 				yarnProps.setProperty(YARN_PROPERTIES_PARALLELISM, parallelism);
 			}
-			// add dynamic properties
-			if (yarnDescriptor.getDynamicPropertiesEncoded() != null) {
-				yarnProps.setProperty(YARN_PROPERTIES_DYNAMIC_PROPERTIES_STRING,
-						yarnDescriptor.getDynamicPropertiesEncoded());
+			for (Map.Entry<String, String> entry : retrieveDynamicProperties(cmd, DYNAMIC_PROPERTIES).entrySet()) {
+				yarnProps.setProperty(entry.getKey(), entry.getValue());
 			}
 			writeYarnProperties(yarnProps, yarnPropertiesFile);
 
@@ -679,28 +659,6 @@ public class FlinkYarnSessionCli implements CustomCommandLine<YarnClusterClient>
 	private void logAndSysout(String message) {
 		LOG.info(message);
 		System.out.println(message);
-	}
-
-	public static Map<String, String> getDynamicProperties(String dynamicPropertiesEncoded) {
-		if (dynamicPropertiesEncoded != null && dynamicPropertiesEncoded.length() > 0) {
-			Map<String, String> properties = new HashMap<>();
-
-			String[] propertyLines = dynamicPropertiesEncoded.split(YARN_DYNAMIC_PROPERTIES_SEPARATOR);
-			for (String propLine : propertyLines) {
-				if (propLine == null) {
-					continue;
-				}
-
-				String[] kv = propLine.split("=");
-				if (kv.length >= 2 && kv[0] != null && kv[1] != null && kv[0].length() > 0) {
-					properties.put(kv[0], kv[1]);
-				}
-			}
-			return properties;
-		}
-		else {
-			return Collections.emptyMap();
-		}
 	}
 
 	public static File getYarnPropertiesLocation(Configuration conf) {

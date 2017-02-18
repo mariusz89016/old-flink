@@ -18,20 +18,12 @@
 
 package org.apache.flink.yarn;
 
-import akka.actor.ActorSystem;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.Options;
-import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.client.CliFrontend;
 import org.apache.flink.client.cli.CliFrontendParser;
 import org.apache.flink.client.cli.RunOptions;
-import org.apache.flink.client.deployment.ClusterDescriptor;
 import org.apache.flink.client.program.ClusterClient;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.yarn.cli.FlinkYarnSessionCli;
-import org.apache.flink.test.util.TestBaseUtils;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.records.ApplicationReport;
@@ -46,46 +38,11 @@ import org.mockito.Mockito;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Map;
 
 public class FlinkYarnSessionCliTest {
 
 	@Rule
 	public TemporaryFolder tmp = new TemporaryFolder();
-
-	@Test
-	public void testDynamicProperties() throws IOException {
-
-		Map<String, String> map = new HashMap<String, String>(System.getenv());
-		File tmpFolder = tmp.newFolder();
-		File fakeConf = new File(tmpFolder, "flink-conf.yaml");
-		fakeConf.createNewFile();
-		map.put(ConfigConstants.ENV_FLINK_CONF_DIR, tmpFolder.getAbsolutePath());
-		TestBaseUtils.setEnv(map);
-		FlinkYarnSessionCli cli = new FlinkYarnSessionCli("", "", false);
-		Options options = new Options();
-		cli.addGeneralOptions(options);
-		cli.addRunOptions(options);
-
-		CommandLineParser parser = new DefaultParser();
-		CommandLine cmd = null;
-		try {
-			cmd = parser.parse(options, new String[]{"run", "-j", "fake.jar", "-n", "15", "-D", "akka.ask.timeout=5 min"});
-		} catch(Exception e) {
-			e.printStackTrace();
-			Assert.fail("Parsing failed with " + e.getMessage());
-		}
-
-		AbstractYarnClusterDescriptor flinkYarnDescriptor = cli.createDescriptor(null, cmd);
-
-		Assert.assertNotNull(flinkYarnDescriptor);
-
-		Map<String, String> dynProperties =
-			FlinkYarnSessionCli.getDynamicProperties(flinkYarnDescriptor.getDynamicPropertiesEncoded());
-		Assert.assertEquals(1, dynProperties.size());
-		Assert.assertEquals("5 min", dynProperties.get("akka.ask.timeout"));
-	}
 
 	@Test
 	public void testNotEnoughTaskSlots() throws Exception {

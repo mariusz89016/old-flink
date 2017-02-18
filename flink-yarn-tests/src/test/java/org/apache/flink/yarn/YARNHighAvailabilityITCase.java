@@ -115,12 +115,15 @@ public class YARNHighAvailabilityITCase extends YarnTestBase {
 		File configDirectory = new File(confDirPath);
 		GlobalConfiguration.loadConfiguration(configDirectory.getAbsolutePath());
 
-		flinkYarnClient.setFlinkConfiguration(GlobalConfiguration.loadConfiguration());
-		flinkYarnClient.setDynamicPropertiesEncoded("recovery.mode=zookeeper@@recovery.zookeeper.quorum=" +
-			zkServer.getConnectString() + "@@yarn.application-attempts=" + numberApplicationAttempts +
-			"@@" + ConfigConstants.STATE_BACKEND + "=FILESYSTEM" +
-			"@@" + FsStateBackendFactory.CHECKPOINT_DIRECTORY_URI_CONF_KEY + "=" + fsStateHandlePath + "/checkpoints" +
-			"@@" + HighAvailabilityOptions.HA_STORAGE_PATH.key() + "=" + fsStateHandlePath + "/recovery");
+		final Configuration configuration = GlobalConfiguration.loadConfiguration();
+		configuration.setString("recovery.mode", "zookeeper");
+		configuration.setString("recovery.zookeeper.quorum", zkServer.getConnectString());
+		configuration.setString("yarn.application-attempts", String.valueOf(numberApplicationAttempts));
+		configuration.setString(ConfigConstants.STATE_BACKEND, "FILESYSTEM");
+		configuration.setString(FsStateBackendFactory.CHECKPOINT_DIRECTORY_URI_CONF_KEY, fsStateHandlePath + "/checkpoints");
+		configuration.setString(HighAvailabilityOptions.HA_STORAGE_PATH.key(), fsStateHandlePath + "/recovery");
+
+		flinkYarnClient.setFlinkConfiguration(configuration);
 		flinkYarnClient.setConfigurationFilePath(new Path(confDirPath + File.separator + "flink-conf.yaml"));
 
 		ClusterClient yarnCluster = null;

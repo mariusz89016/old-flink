@@ -21,7 +21,6 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.client.cli.CliFrontendParser;
 import org.apache.flink.client.cli.CustomCommandLine;
 import org.apache.flink.configuration.Configuration;
@@ -42,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.apache.flink.client.cli.CliFrontendParser.ADDRESS_OPTION;
+import static org.apache.flink.yarn.cli.FlinkYarnCliUtils.retrieveDynamicProperties;
 
 /**
  * Class handling the command line interface to the YARN per job mode under flip-6.
@@ -51,8 +51,6 @@ public class FlinkYarnCLI implements CustomCommandLine<YarnClusterClientV2> {
 
 	/** The id for the CommandLine interface */
 	private static final String ID = "yarn";
-
-	private static final String YARN_DYNAMIC_PROPERTIES_SEPARATOR = "@@"; // this has to be a regex for String.split()
 
 	//------------------------------------ Command Line argument options -------------------------
 	// the prefix transformation is used by the CliFrontend static constructor.
@@ -149,13 +147,7 @@ public class FlinkYarnCLI implements CustomCommandLine<YarnClusterClientV2> {
 			yarnClusterDescriptor.setJobManagerMemory(jmMemory);
 		}
 
-		String[] dynamicProperties = null;
-		if (cmd.hasOption(DYNAMIC_PROPERTIES.getOpt())) {
-			dynamicProperties = cmd.getOptionValues(DYNAMIC_PROPERTIES.getOpt());
-		}
-		String dynamicPropertiesEncoded = StringUtils.join(dynamicProperties, YARN_DYNAMIC_PROPERTIES_SEPARATOR);
-
-		yarnClusterDescriptor.setDynamicPropertiesEncoded(dynamicPropertiesEncoded);
+		yarnClusterDescriptor.setDynamicPropertiesMap(retrieveDynamicProperties(cmd, DYNAMIC_PROPERTIES));
 
 		if (cmd.hasOption(DETACHED.getOpt()) || cmd.hasOption(CliFrontendParser.DETACHED_OPTION.getOpt())) {
 			// TODO: not support non detach mode now.

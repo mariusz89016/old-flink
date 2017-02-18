@@ -26,7 +26,6 @@ import org.apache.flink.configuration.SecurityOptions;
 import org.apache.flink.runtime.clusterframework.BootstrapTools;
 import org.apache.flink.runtime.security.SecurityUtils;
 import org.apache.flink.util.Preconditions;
-import org.apache.flink.yarn.cli.FlinkYarnSessionCli;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
@@ -98,12 +97,7 @@ public abstract class AbstractYarnFlinkApplicationMasterRunner {
 			LOG.info("YARN daemon is running as: {} Yarn client user obtainer: {}",
 					currentUser.getShortUserName(), yarnClientUsername );
 
-			// Flink configuration
-			final Map<String, String> dynamicProperties =
-					FlinkYarnSessionCli.getDynamicProperties(ENV.get(YarnConfigKeys.ENV_DYNAMIC_PROPERTIES));
-			LOG.debug("YARN dynamic properties: {}", dynamicProperties);
-
-			final Configuration flinkConfig = createConfiguration(currDir, dynamicProperties);
+			final Configuration flinkConfig = createConfiguration(currDir);
 			if (keytabPath != null && remoteKeytabPrincipal != null) {
 				flinkConfig.setString(SecurityOptions.KERBEROS_LOGIN_KEYTAB, keytabPath);
 				flinkConfig.setString(SecurityOptions.KERBEROS_LOGIN_PRINCIPAL, remoteKeytabPrincipal);
@@ -169,21 +163,15 @@ public abstract class AbstractYarnFlinkApplicationMasterRunner {
 	// ------------------------------------------------------------------------
 	/**
 	 * @param baseDirectory  The working directory
-	 * @param additional Additional parameters
-	 * 
+	 *
 	 * @return The configuration to be used by the TaskExecutors.
 	 */
-	private static Configuration createConfiguration(String baseDirectory, Map<String, String> additional) {
+	private static Configuration createConfiguration(String baseDirectory) {
 		LOG.info("Loading config from directory {}.", baseDirectory);
 
 		Configuration configuration = GlobalConfiguration.loadConfiguration(baseDirectory);
 
 		configuration.setString(ConfigConstants.FLINK_BASE_DIR_PATH_KEY, baseDirectory);
-
-		// add dynamic properties to JobManager configuration.
-		for (Map.Entry<String, String> property : additional.entrySet()) {
-			configuration.setString(property.getKey(), property.getValue());
-		}
 
 		// override zookeeper namespace with user cli argument (if provided)
 		String cliZKNamespace = ENV.get(YarnConfigKeys.ENV_ZOOKEEPER_NAMESPACE);
